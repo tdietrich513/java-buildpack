@@ -295,8 +295,8 @@ module JavaBuildpack
           uri.scheme == 'https'
         end
 
-        def check_no_proxy(uri)
-          no_proxy = ENV['no_proxy'] || ENV['NO_PROXY']
+        def should_use_proxy?(uri)
+          no_proxy = ENV['no_proxy'] || ENV['NO_PROXY'] || ''
           no_proxy_domains = no_proxy.split(',').map { |s| s.gsub(/\s+/, '') }
           uri_host = uri.host
           use_proxy = true
@@ -308,21 +308,22 @@ module JavaBuildpack
         end
 
         def update(uri, cached_file)
-          if check_no_proxy(uri)
+          if should_use_proxy? uri
             proxy(uri).start(uri.host, uri.port, http_options(uri)) do |http|
-              @logger.debug { "HTTP: #{http.address}, #{http.port}, #{http_options(uri)}" }
-              debug_ssl(http) if secure?(uri)
-
-              attempt_update(cached_file, http, uri)
+              wrap_update(cached_file, http, uri)
             end
           else
             Net::HTTP.start(uri.host, uri.port, nil, nil, nil, nil, http_options(uri)) do |http|
-              @logger.debug { "HTTP: #{http.address}, #{http.port}, #{http_options(uri)}" }
-              debug_ssl(http) if secure?(uri)
-
-              attempt_update(cached_file, http, uri)
+              wrap_update(cached_file, http, uri)
             end
           end
+        end
+
+        def wrap_update(cached_file, http, uri)
+          @logger.debug { "HTTP: #{http.address}, #{http.port}, #{http_options(uri)}" }
+          debug_ssl(http) if secure?(uri)
+
+          attempt_update(cached_file, http, uri)
         end
 
         def attempt_update(cached_file, http, uri)
